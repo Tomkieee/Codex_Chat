@@ -1060,7 +1060,16 @@ export default {
             <legend>Punkty (Q, H)</legend>
             <table>
               <thead><tr><th style="width:50%">Q [m3/h]</th><th>H [m]</th></tr></thead>
-              <tbody id="rows"></tbody>
+              <tbody id="rows">
+                ${Array.from({ length: 20 }).map((_, i) => {
+                  const idx = i + 1;
+                  return `
+                <tr>
+                  <td><input class="qh" id="q${idx}" type="text" inputmode="decimal" placeholder="np. 1,2" autocomplete="off" autocorrect="off" spellcheck="false"></td>
+                  <td><input class="qh" id="h${idx}" type="text" inputmode="decimal" placeholder="np. 28,4" autocomplete="off" autocorrect="off" spellcheck="false"></td>
+                </tr>`;
+                }).join('')}
+              </tbody>
             </table>
             <div class="actions" style="margin-top:10px">
               <button id="fillSample" type="button" class="secondary">Wstaw przykładowe</button>
@@ -1100,20 +1109,9 @@ export default {
           return v;
         }
 
-        function buildRows() {
+        function setupRowInputs() {
           const tbody = document.getElementById('rows');
           if (!tbody) return;
-          tbody.innerHTML = '';
-          for (let i = 1; i <= 20; i++) {
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-              '<td><input class="qh" id="q' + i + '" type="text" inputmode="decimal" ' +
-              'placeholder="np. 1,2" autocomplete="off" autocorrect="off" spellcheck="false"></td>' +
-              '<td><input class="qh" id="h' + i + '" type="text" inputmode="decimal" ' +
-              'placeholder="np. 28,4" autocomplete="off" autocorrect="off" spellcheck="false"></td>';
-            tbody.appendChild(tr);
-          }
-
           tbody.querySelectorAll('input.qh').forEach(function(inp) {
             let composing = false;
             inp.addEventListener('compositionstart', function() { composing = true; });
@@ -1320,7 +1318,7 @@ export default {
         }
 
         function init() {
-          buildRows();
+          setupRowInputs();
           const renderBtn = document.getElementById('renderBtn');
           if (renderBtn) renderBtn.addEventListener('click', render);
           const clearBtn = document.getElementById('clearBtn');
