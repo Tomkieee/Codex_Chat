@@ -1350,39 +1350,87 @@ export default {
     }
 
     if (url.pathname === "/render" && req.method === "POST") {
-      let payload;
-      try {
-        payload = await req.json();
-      } catch {
-        return new Response("Invalid JSON", { status: 400 });
-      }
-      if (!payload || !Array.isArray(payload.curve) || payload.curve.length < 2) {
-        return new Response('Payload must include curve: [{Q,H}, ...] (min 2)', { status: 400 });
-      }
-      let imageResource = null;
-      let imageWarning = "";
-      if (payload.image && typeof payload.image === 'object') {
-        try {
-          imageResource = await fetchImageResource(payload.image);
-        } catch (err) {
-          const msg = err && err.message ? err.message : String(err);
-          imageWarning = msg ? `Nie udało się pobrać obrazu: ${msg}` : "Nie udało się pobrać obrazu.";
-        }
-      }
-      const { pageWidth, pageHeight, content, usedGlyphs, xObjects } = makeChartContentStream(payload, { image: imageResource });
-      const pdf = buildPDF({ pageWidth, pageHeight, content, usedGlyphs, xObjects });
-      const headers = {
-        "content-type":"application/pdf",
-        "content-disposition":"inline; filename=\"karta-pompy.pdf\"",
-        "cache-control":"no-store"
-      };
-      if (imageWarning) {
-        const safeWarning = imageWarning.replace(/[\r\n]+/g, " ").trim();
-        if (safeWarning) headers["x-image-warning"] = encodeURIComponent(safeWarning).slice(0, 1024);
-      }
-      return new Response(pdf, { headers });
-    }
-
-    return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" }});
+  // Parse JSON
+  let payload;
+  try {
+    payload = await req.json();
+  } catch {
+    return new Response("Invalid JSON", {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
   }
-};
+
+  // Basic validation
+  if (!payload || !Array.isArray(payload.curve) || payload.curve.length < 2) {
+    return new Response('Payload must include curve: [{Q,H}, ...] (min 2)', {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  // Optional image
+  let imageResource = null;
+  let imageWarning = "";
+  if (payload.image && typeof payload.image === "object") {
+    try {
+      imageResource = await fetchImageResource(payload.image);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      imageWarning = msg
+        ? `Nie udało się pobrać obrazu: ${msg}`
+        : "Nie udało się pobrać obrazu.";
+    }
+  }
+
+  // Build PDF content
+  let pageWidth, pageHeight, content, usedGlyphs, xObjects;
+  try {
+    ({ pageWidth, pageHeight, content, usedGlyphs, xObjects } =
+      makeChartContentStream(payload, { image: imageResource }));
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    return new Response(`Failed to render chart: ${msg}`, {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  let pdf;
+  try {
+    pdf = buildPDF({ pageWidth, pageHeight, content, usedGlyphs, xObjects });
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    return new Response(`Failed to build PDF: ${msg}`, {
+      status: 500,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  // Headers
+  const headers = {
+    "content-type": "application/pdf",
+    // RFC 5987 for non-ASCII safety (even though filename here is ASCII)
+    "content-disposition":
+      'inline; filename="karta-pompy.pdf"; filename*=UTF-8\'\'karta-pompy.pdf',
+    "cache-control": "no-store, private",
+  };
+
+  // Attach a warning header if image fetch failed
+  if (imageWarning) {
+    const raw = imageWarning.replace(/[\r\n]+/g, " ").trim();
+    if (raw) {
+      // Slice BEFORE encoding to avoid splitting a %XX triplet
+      // 340 chars ~<= 1020 bytes worst-case once encoded
+      const sliced = raw.slice(0, 340);
+      headers["x-image-warning"] = encodeURIComponent(sliced);
+    }
+  }
+
+  return new Response(pdf, { headers });
+}
+
+return new Response("Not found", {
+  status: 404,
+  headers: { "content-type": "text/plain; charset=utf-8" },
+});
