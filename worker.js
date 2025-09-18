@@ -1,3 +1,4 @@
+codex/confirm-if-code-can-be-pasted-here-oyj98p
 import { DEJAVU_SANS_BASE64 } from "./font-data.js";
 
 // Worker: generuje PDF z wykresem H(Q) i jedną parą podpisów: "Q [m3/h] ", "2 pompy", "3 pompy" (bez x2/x3).
